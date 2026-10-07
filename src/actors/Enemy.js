@@ -6,7 +6,7 @@ const ARCHETYPES = {
   parasitic: { zh: "砷铅铁寄生蛛", en: "PARASITIC SPIDER", role: "lunge", health: 4, speed: 78, body: 0x1a2627, edge: 0x55706d, eye: 0xe34e4e, bar: 0xc66558, scale: 1 },
   cow: { zh: "奶牛蜘蛛", en: "COW SPIDER", role: "hop", health: 2, speed: 124, body: 0x111817, edge: 0x4d785c, eye: 0x67ed72, bar: 0x73cf7c, scale: 0.82 },
   frost: { zh: "冰霜蜘蛛", en: "FROST SPIDER", role: "freeze", health: 1, speed: 62, body: 0x263b49, edge: 0x89c9df, eye: 0x78e8ff, bar: 0x7fcce2, scale: 1.06 },
-  hair: { zh: "毛蜘蛛", en: "HAIR SPIDER", role: "hazard", health: 6, speed: 54, body: 0x342923, edge: 0x9a7254, eye: 0xe2a35e, bar: 0xb78258, scale: 1.14 },
+  hair: { zh: "毛蜘蛛", en: "HAIR SPIDER", role: "hazard", health: 2, speed: 54, body: 0x342923, edge: 0x9a7254, eye: 0xe2a35e, bar: 0xb78258, scale: 1.14 },
   widow: { zh: "黑寡妇蜘蛛", en: "BLACK WIDOW", role: "poison", health: 4, speed: 145, body: 0x17151c, edge: 0xa13d54, eye: 0xff5368, bar: 0xd14c62, scale: 0.88 },
 };
 
@@ -176,7 +176,9 @@ export class Enemy extends Phaser.GameObjects.Container {
       const warning = this.hazardWarning;
       this.hazardWarning = null;
       this.kickHairProjectile(this.lockedTarget.x, warning);
-      this.finishAttack(1450);
+      // The landing hazard lasts 2.8 seconds, so the longer recovery prevents
+      // one Hair Spider from covering the arena with overlapping zones.
+      this.finishAttack(3500);
     });
   }
 

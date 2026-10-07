@@ -9,6 +9,8 @@ const GROUND_COMBO = [
   { name: "强力终结", anticipation: 125, swing: 145, recovery: 155, damage: 2, width: 126, height: 98, x: 70, y: -3, knockback: 520, start: -1.55, end: 1.82, backStart: 0.92, backEnd: -0.7, leanStart: -0.2, leanEnd: 0.22, trail: "finisher" },
 ];
 
+const MELEE_OVERLAP_PADDING = 40;
+
 export class Player extends Phaser.GameObjects.Container {
   constructor(scene, x, y) {
     super(scene, x, y);
@@ -74,7 +76,10 @@ export class Player extends Phaser.GameObjects.Container {
       this.jumpsUsed += 1; this.body.setVelocityY(-670);
       if (this.jumpsUsed === 2) this.showDoubleJumpEffect();
     }
-    if (Phaser.Input.Keyboard.JustDown(controls.dodge) || mouseActions.dodge) this.dodge(time);
+    if (Phaser.Input.Keyboard.JustDown(controls.dodge) || mouseActions.dodge) {
+      const dodgeDirection = left !== right ? (left ? -1 : 1) : this.facing;
+      this.dodge(time, dodgeDirection);
+    }
     if (Phaser.Input.Keyboard.JustDown(controls.attack) || mouseActions.attack) this.attack(time, grounded);
     if (Phaser.Input.Keyboard.JustDown(controls.skill) || mouseActions.skill) this.castSkill(time);
     if (!this.isAttacking && time > this.comboExpiresAt) this.comboIndex = 0;
@@ -87,10 +92,12 @@ export class Player extends Phaser.GameObjects.Container {
     this.rig.animateLocomotion(time, grounded, this.body.velocity.x, this.body.velocity.y);
   }
 
-  dodge(time) {
+  dodge(time, direction = this.facing) {
     if (this.isDodging || this.stamina < 25) return;
     this.cancelAttack();
     this.frozenUntil = 0;
+    this.facing = direction;
+    this.rig.setFacing(this.facing);
     this.stamina -= 25; this.isDodging = true; this.invulnerableUntil = time + 360;
     this.body.setVelocityX(this.facing * 610); this.body.setVelocityY(-80);
     this.setAlpha(0.58); this.rig.poseDodge(this.facing);
@@ -221,7 +228,13 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   createAttackHitbox(attack) {
-    const hitbox = this.scene.add.zone(this.x + this.facing * attack.x, this.y + attack.y, attack.width, attack.height);
+    // Extend the inner edge through the player's body while preserving the
+    // original far reach. This removes the dead zone when large enemies overlap
+    // the character model without turning the attack into a rear-facing hit.
+    const overlapPadding = attack.overlapPadding ?? MELEE_OVERLAP_PADDING;
+    const hitboxWidth = attack.width + overlapPadding;
+    const hitboxOffset = attack.x - overlapPadding * 0.5;
+    const hitbox = this.scene.add.zone(this.x + this.facing * hitboxOffset, this.y + attack.y, hitboxWidth, attack.height);
     this.scene.physics.add.existing(hitbox); hitbox.body.setAllowGravity(false);
     const struck = new Set();
     this.scene.physics.overlap(hitbox, this.scene.enemies, (_zone, enemy) => {
