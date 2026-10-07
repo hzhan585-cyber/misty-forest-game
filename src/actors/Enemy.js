@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { createSpiderVisual } from "./SpiderVisual.js";
 
 const RELEASE_WARNING_LEAD_MS = 280;
 
@@ -20,32 +21,18 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.attackDirectionLocked = false; this.lockedAttackDirection = -1; this.lockedTarget = null;
     scene.add.existing(this); scene.physics.add.existing(this);
 
-    this.shadow = scene.add.ellipse(0, 25, 58, 13, 0x000000, 0.4);
-    this.bodyPart = scene.add.ellipse(0, 4, 45, 30, this.config.body).setStrokeStyle(2, this.config.edge);
-    this.head = scene.add.circle(-25, 7, 14, this.config.body).setStrokeStyle(2, this.config.edge);
-    this.eyeA = scene.add.circle(-30, 3, 3, this.config.eye);
-    this.eyeB = scene.add.circle(-21, 3, 3, this.config.eye);
-    this.legs = [];
-    for (let i = 0; i < 4; i += 1) {
-      const yOffset = -5 + i * 8;
-      const leftLeg = scene.add.rectangle(-26, yOffset, 30, 4, this.config.edge).setOrigin(1, 0.5);
-      const rightLeg = scene.add.rectangle(26, yOffset, 30, 4, this.config.edge).setOrigin(0, 0.5);
-      leftLeg.rotation = -0.5 + i * 0.27; rightLeg.rotation = 0.5 - i * 0.27;
-      this.legs.push(leftLeg, rightLeg);
-    }
-    if (this.type === "hair") {
-      this.hairs = scene.add.graphics(); this.hairs.lineStyle(2, 0xc49a70, 0.8);
-      for (let xOffset = -18; xOffset <= 18; xOffset += 9) this.hairs.lineBetween(xOffset, -8, xOffset * 1.45, -25 - Math.abs(xOffset) * 0.2);
-    }
-    if (this.type === "widow") {
-      this.mark = scene.add.rectangle(8, 3, 13, 13, 0xc63f51).setAngle(45);
-    }
-    this.healthBack = scene.add.rectangle(0, -37, 56, 7, 0x071010, 0.9);
-    this.healthFill = scene.add.rectangle(-27, -37, 54, 5, this.config.bar).setOrigin(0, 0.5);
-    this.nameLabel = scene.add.text(0, -55, scene.language === "en" ? this.config.en : this.config.zh, {
+    const visual = createSpiderVisual(scene, this.type, this.config);
+    this.model = visual.model; this.shadow = visual.shadow;
+    this.bodyPart = visual.bodyPart; this.head = visual.head;
+    this.eyeA = visual.eyeA; this.eyeB = visual.eyeB;
+    this.legs = visual.legs; this.hindLegs = visual.hindLegs;
+    this.hairs = visual.hairs; this.mark = visual.mark;
+    this.healthBack = scene.add.rectangle(0, -54, 56, 7, 0x071010, 0.9);
+    this.healthFill = scene.add.rectangle(-27, -54, 54, 5, this.config.bar).setOrigin(0, 0.5);
+    this.nameLabel = scene.add.text(0, -70, scene.language === "en" ? this.config.en : this.config.zh, {
       fontFamily: '"Microsoft YaHei", sans-serif', fontSize: "10px", color: "#c9d8d5", stroke: "#061013", strokeThickness: 3,
     }).setOrigin(0.5);
-    this.add([this.shadow, ...this.legs, this.bodyPart, this.hairs, this.mark, this.head, this.eyeA, this.eyeB, this.healthBack, this.healthFill, this.nameLabel].filter(Boolean));
+    this.add([this.shadow, this.model, this.healthBack, this.healthFill, this.nameLabel]);
     this.setScale(this.config.scale);
     this.body.setSize(58, 48); this.body.setOffset(-29, -24);
     this.body.setCollideWorldBounds(true); this.body.setMaxVelocity(520, 900);
@@ -56,11 +43,15 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.guardAgainstTerrainSeams();
     const distance = player.x - this.x; const absoluteDistance = Math.abs(distance);
     if (!this.attackDirectionLocked) this.facing = Math.sign(distance) || this.facing;
-    this.scaleX = (this.facing < 0 ? 1 : -1) * this.config.scale;
+    this.model.scaleX = this.facing < 0 ? 1 : -1;
 
     if (this.state === "stagger" || this.state === "recover") {
       if (time >= this.stateUntil) { this.state = "chase"; this.attackDirectionLocked = false; }
-      else { this.animateLegs(time, false); return; }
+      else {
+        const movingDuringRecovery = this.state === "recover" && Math.abs(this.body.velocity.x) > 40;
+        this.animateLegs(time, movingDuringRecovery);
+        return;
+      }
     }
     if (this.state === "windup") { this.body.setVelocityX(0); this.animateLegs(time, false); return; }
 
@@ -95,6 +86,8 @@ export class Enemy extends Phaser.GameObjects.Container {
   beginWindup(windup, color = 0xffd071) {
     this.state = "windup"; this.body.setVelocityX(0); this.attackDirectionLocked = false;
     this.eyeA.setFillStyle(color); this.eyeB.setFillStyle(color);
+    this.scene.tweens.killTweensOf(this.model);
+    this.scene.tweens.add({ targets: this.model, y: 5, scaleY: 0.84, duration: Math.min(240, windup * 0.42), ease: "Cubic.Out" });
     this.showGatherFlash(color);
     return ++this.attackToken;
   }
@@ -183,7 +176,7 @@ export class Enemy extends Phaser.GameObjects.Container {
   }
 
   kickHairProjectile(targetX, warning) {
-    const hindLegs = this.legs.slice(-2);
+    const hindLegs = this.hindLegs ?? this.legs.slice(-2);
     hindLegs.forEach((leg, index) => {
       this.scene.tweens.add({ targets: leg, rotation: leg.rotation + (index === 0 ? -0.75 : 0.75), duration: 95, yoyo: true, ease: "Back.Out" });
     });
@@ -265,6 +258,7 @@ export class Enemy extends Phaser.GameObjects.Container {
   finishAttack(recovery) {
     this.state = "recover"; this.stateUntil = this.scene.time.now + recovery;
     this.eyeA.setFillStyle(this.config.eye); this.eyeB.setFillStyle(this.config.eye);
+    this.scene.tweens.add({ targets: this.model, y: 0, scaleY: 1, duration: 170, ease: "Back.Out" });
   }
 
   isAttackValid(token) { return this.active && this.state !== "dead" && token === this.attackToken; }
@@ -276,12 +270,12 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   showAttackFlash(color) {
     const flash = this.scene.add.circle(this.x, this.y, 42, color, 0.3).setStrokeStyle(5, 0xffffff, 0.95).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({ targets: this.model, y: -3, scaleY: 1.06, duration: 90, ease: "Back.Out" });
     this.scene.tweens.add({ targets: flash, scaleX: 1.45, scaleY: 1.45, alpha: 0, duration: 105, ease: "Cubic.Out", onComplete: () => flash.destroy() });
   }
 
   animateLegs(time, moving) {
-    const scuttle = moving ? Math.sin(time * 0.018 + this.enemyId) * 1.4 : 0;
-    this.legs.forEach((leg, index) => { leg.y = -5 + Math.floor(index / 2) * 8 + (index % 2 === 0 ? scuttle : -scuttle); });
+    this.legs.forEach((leg) => leg.animateStep?.(time + this.enemyId * 37, moving, 1));
   }
 
   guardAgainstTerrainSeams() {
@@ -298,6 +292,8 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.hazardWarning?.destroy(); this.hazardWarning = null;
     this.state = "stagger"; this.stateUntil = this.scene.time.now + 180;
     this.eyeA.setFillStyle(this.config.eye); this.eyeB.setFillStyle(this.config.eye);
+    this.scene.tweens.killTweensOf(this.model);
+    this.model.y = 0; this.model.scaleY = 1;
     this.body.setVelocity(direction * knockback, -150);
     this.healthFill.scaleX = Phaser.Math.Clamp(this.health / this.maxHealth, 0, 1);
     this.scene.tweens.add({ targets: [this.bodyPart, this.head], alpha: 0.25, duration: 55, yoyo: true });

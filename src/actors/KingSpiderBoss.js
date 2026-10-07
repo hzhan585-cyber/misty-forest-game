@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { createKingSpiderVisual } from "./SpiderVisual.js";
 
 const RELEASE_LEAD_MS = 280;
 
@@ -19,29 +20,11 @@ export class KingSpiderBoss extends Phaser.GameObjects.Container {
     this.attackHitDone = false;
     this.summonStage = 0;
 
-    this.shadow = scene.add.rectangle(0, 48, 180, 22, 0x000000, 0.42);
-    this.abdomen = scene.add.rectangle(34, -2, 108, 70, 0x211d24).setStrokeStyle(5, 0x743c42);
-    this.bodyPart = scene.add.rectangle(-35, 5, 78, 58, 0x181c20).setStrokeStyle(4, 0x5d343b);
-    this.head = scene.add.rectangle(-79, 11, 48, 46, 0x11171a).setStrokeStyle(4, 0x63363e);
-    this.eyeA = scene.add.rectangle(-91, 3, 8, 8, 0xe14c4c);
-    this.eyeB = scene.add.rectangle(-76, 3, 8, 8, 0xe14c4c);
-    this.crown = scene.add.graphics();
-    this.crown.fillStyle(0xa47a35, 1);
-    this.crown.fillRect(-100, -37, 54, 11);
-    this.crown.fillRect(-96, -56, 10, 21);
-    this.crown.fillRect(-77, -66, 10, 31);
-    this.crown.fillRect(-58, -54, 10, 19);
-
-    this.legs = [];
-    for (let index = 0; index < 4; index += 1) {
-      const yOffset = -17 + index * 17;
-      const leftOuter = scene.add.rectangle(-84, yOffset, 72, 10, 0x24252a).setOrigin(1, 0.5);
-      const rightOuter = scene.add.rectangle(82, yOffset, 72, 10, 0x24252a).setOrigin(0, 0.5);
-      leftOuter.rotation = -0.54 + index * 0.18;
-      rightOuter.rotation = 0.54 - index * 0.18;
-      this.legs.push(leftOuter, rightOuter);
-    }
-    this.add([this.shadow, ...this.legs, this.abdomen, this.bodyPart, this.head, this.eyeA, this.eyeB, this.crown]);
+    const visual = createKingSpiderVisual(scene);
+    this.model = visual.model; this.shadow = visual.shadow;
+    this.abdomen = visual.abdomen; this.bodyPart = visual.bodyPart; this.head = visual.head;
+    this.eyeA = visual.eyeA; this.eyeB = visual.eyeB; this.crown = visual.crown; this.legs = visual.legs;
+    this.add([this.shadow, this.model]);
     this.body.setSize(170, 105);
     this.body.setOffset(-85, -52);
     this.body.setCollideWorldBounds(true);
@@ -51,7 +34,8 @@ export class KingSpiderBoss extends Phaser.GameObjects.Container {
   update(time, player) {
     if (!this.active || !this.body || !player.active || this.state === "dead") return;
     if (!this.attackDirectionLocked) this.facing = Math.sign(player.x - this.x) || this.facing;
-    this.scaleX = this.facing < 0 ? 1 : -1;
+    this.model.scaleX = this.facing < 0 ? 1 : -1;
+    this.animateLegs(time);
 
     if (this.state !== "idle") {
       if (this.state === "recover" && time >= this.stateUntil) {
@@ -154,11 +138,13 @@ export class KingSpiderBoss extends Phaser.GameObjects.Container {
     });
   }
 
-  beginAttack() {
+  beginAttack(windup = 720) {
     this.state = "windup";
     this.body.setVelocityX(0);
     this.attackDirectionLocked = false;
     this.eyeA.setFillStyle(0xffcf62); this.eyeB.setFillStyle(0xffcf62);
+    this.scene.tweens.killTweensOf(this.model);
+    this.scene.tweens.add({ targets: this.model, y: 9, scaleY: 0.84, duration: Math.min(310, windup * 0.45), ease: "Cubic.Out" });
     return ++this.attackToken;
   }
 
@@ -171,6 +157,12 @@ export class KingSpiderBoss extends Phaser.GameObjects.Container {
     this.state = "recover";
     this.stateUntil = this.scene.time.now + duration;
     this.eyeA.setFillStyle(0xe14c4c); this.eyeB.setFillStyle(0xe14c4c);
+    this.scene.tweens.add({ targets: this.model, y: 0, scaleY: 1, duration: 230, ease: "Back.Out" });
+  }
+
+  animateLegs(time) {
+    const moving = Math.abs(this.body.velocity.x) > 35;
+    this.legs.forEach((leg) => leg.animateStep?.(time, moving, 1.2));
   }
 
   isAttackValid(token) { return this.active && this.state !== "dead" && token === this.attackToken; }

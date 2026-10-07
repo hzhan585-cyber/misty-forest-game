@@ -19,6 +19,14 @@ export class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
+  preload() {
+    this.load.image("background-forest-entrance", "assets/backgrounds/forest-entrance.webp");
+    this.load.image("background-deep-woods", "assets/backgrounds/deep-woods.webp");
+    this.load.image("background-webbed-grove", "assets/backgrounds/webbed-grove.webp");
+    this.load.image("background-abandoned-caravan", "assets/backgrounds/abandoned-caravan.webp");
+    this.load.image("background-king-spider-nest", "assets/backgrounds/king-spider-nest.webp");
+  }
+
   create(data = {}) {
     this.language = getLanguage();
     this.tr = (key, values) => t(this.language, key, values);
@@ -84,23 +92,37 @@ export class GameScene extends Phaser.Scene {
     this.environmentPalette = palette;
     this.cameras.main.setBackgroundColor(Phaser.Display.Color.IntegerToColor(palette.sky).rgba);
 
-    const sky = this.add.graphics().setScrollFactor(0);
-    sky.fillStyle(palette.sky, 1); sky.fillRect(0, 0, 1280, 720);
-    for (let band = 0; band < 7; band += 1) {
-      sky.fillStyle(palette.horizon, 0.025 + band * 0.012);
-      sky.fillRect(0, 190 + band * 58, 1280, 58);
-    }
-    this.drawBlockMoonAndRays(sky, palette);
-    this.drawBlockTreeLayer(0.12, palette.far, 490, 150, 250, 0.72);
-    this.drawDistantRuins(palette);
-    this.drawBlockTreeLayer(0.42, palette.mid, 565, this.area.id === "deep-woods" ? 104 : 132, 330, 0.92);
-    this.drawMistBands(palette);
-    this.drawBlockTreeLayer(0.76, palette.near, 630, this.area.id === "deep-woods" ? 150 : 190, 410, 0.82);
+    const backdropKey = `background-${this.area.id}`;
+    const hasBackdrop = this.textures.exists(backdropKey);
+    this.hasGeneratedBackdrop = hasBackdrop;
 
-    if (this.area.id === "webbed-grove" || this.area.id === "king-spider-nest") this.drawWebs();
-    if (this.area.id === "abandoned-caravan") this.drawCaravan();
-    if (this.area.id === "forest-entrance") this.drawEntranceRuins();
-    this.drawEnvironmentalStoryDetails(palette);
+    if (hasBackdrop) {
+      // The painted plate carries the large ruins, lighting and distant forest. A little
+      // overscan leaves room for subtle camera parallax without exposing its edges.
+      this.add.image(640, 360, backdropKey)
+        .setDisplaySize(1360, 765)
+        .setScrollFactor(0.03);
+      this.add.rectangle(640, 360, 1280, 720, palette.sky, 0.2).setScrollFactor(0);
+      this.add.rectangle(640, 655, 1280, 150, palette.near, 0.42).setScrollFactor(0);
+    } else {
+      const sky = this.add.graphics().setScrollFactor(0);
+      sky.fillStyle(palette.sky, 1); sky.fillRect(0, 0, 1280, 720);
+      for (let band = 0; band < 7; band += 1) {
+        sky.fillStyle(palette.horizon, 0.025 + band * 0.012);
+        sky.fillRect(0, 190 + band * 58, 1280, 58);
+      }
+      this.drawBlockMoonAndRays(sky, palette);
+    }
+    this.drawBlockTreeLayer(0.12, palette.far, 490, 150, 250, hasBackdrop ? 0.12 : 0.72);
+    if (!hasBackdrop) this.drawDistantRuins(palette);
+    this.drawBlockTreeLayer(0.42, palette.mid, 565, this.area.id === "deep-woods" ? 104 : 132, 330, hasBackdrop ? 0.18 : 0.92);
+    this.drawMistBands(palette);
+    this.drawBlockTreeLayer(0.76, palette.near, 630, this.area.id === "deep-woods" ? 150 : 190, 410, hasBackdrop ? 0.28 : 0.82);
+
+    if (this.area.id === "webbed-grove" || this.area.id === "king-spider-nest") this.drawWebs(hasBackdrop ? 0.12 : 0.34);
+    if (!hasBackdrop && this.area.id === "abandoned-caravan") this.drawCaravan();
+    if (!hasBackdrop && this.area.id === "forest-entrance") this.drawEntranceRuins();
+    this.drawEnvironmentalStoryDetails(palette, hasBackdrop ? 0.34 : 0.86);
     this.drawGroundDetailLayer(palette);
     this.drawDriftingPixelFog(palette);
   }
@@ -184,8 +206,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  drawEnvironmentalStoryDetails(palette) {
-    const details = this.add.graphics().setScrollFactor(0.82).setAlpha(0.86);
+  drawEnvironmentalStoryDetails(palette, alpha = 0.86) {
+    const details = this.add.graphics().setScrollFactor(0.82).setAlpha(alpha);
     const wood = this.area.id === "abandoned-caravan" ? 0x4b352b : 0x263333;
     const woodDark = 0x101b1c;
 
@@ -299,8 +321,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  drawWebs() {
-    const webs = this.add.graphics().setAlpha(0.34);
+  drawWebs(alpha = 0.34) {
+    const webs = this.add.graphics().setAlpha(alpha);
     webs.lineStyle(2, 0xcadadd, 1);
     for (let x = 180; x < 1580; x += 270) {
       webs.lineBetween(x, 210, x + 190, 525);
@@ -385,11 +407,13 @@ export class GameScene extends Phaser.Scene {
       "king-spider-nest": [[0, 260, 620], [260, 1440, 630], [1440, 1700, 620]],
     };
     this.terrainProfile = terrainProfiles[this.area.id];
+    this.terrainMaterial = this.getTerrainMaterial();
     this.terrainProfile.forEach(([left, right, top]) => {
       const width = right - left;
       const height = 720 - top;
-      this.addPlatform(left + width / 2, top + height / 2, width + 2, height, 0x111b1c);
+      this.addPlatform(left + width / 2, top + height / 2, width + 2, height);
     });
+    this.drawMinecraftForegroundProps();
   }
 
   getTerrainTopAt(x) {
@@ -397,22 +421,178 @@ export class GameScene extends Phaser.Scene {
     return segment?.[2] ?? 630;
   }
 
-  addPlatform(x, y, width, height, color) {
-    const platform = this.add.rectangle(x, y, width, height, color).setStrokeStyle(2, 0x304344);
+  addPlatform(x, y, width, height) {
+    const platform = this.add.rectangle(x, y, width, height, 0x000000, 0);
     this.physics.add.existing(platform, true);
     this.platforms.add(platform);
-    const blocks = this.add.graphics();
-    const left = x - width / 2;
-    const top = y - height / 2;
-    blocks.fillStyle(0x354746, 0.88); blocks.fillRect(left, top, width, 6);
-    blocks.lineStyle(1, 0x071516, 0.62);
-    for (let seam = 32; seam < width; seam += 32) {
-      blocks.lineBetween(left + seam, top + 6, left + seam, top + height);
-    }
-    if (height > 30) {
-      for (let row = 32; row < height; row += 28) blocks.lineBetween(left, top + row, left + width, top + row);
-    }
+    this.drawMinecraftTerrain(x - width / 2, y - height / 2, width, height);
     return platform;
+  }
+
+  getTerrainMaterial() {
+    const materials = {
+      "forest-entrance": {
+        blocks: [0x263735, 0x2e403c, 0x344741, 0x20302f], top: 0x58705a, edge: 0x172523,
+        fleck: 0x718276, foliage: 0x4c6b50, accent: 0xc69a53,
+      },
+      "deep-woods": {
+        blocks: [0x1d302e, 0x263936, 0x29413b, 0x172827], top: 0x405f4b, edge: 0x101f1e,
+        fleck: 0x60766b, foliage: 0x355c43, accent: 0xb88747,
+      },
+      "webbed-grove": {
+        blocks: [0x29363d, 0x32424a, 0x233139, 0x1b2930], top: 0x607078, edge: 0x121e25,
+        fleck: 0x91a5ad, foliage: 0x52656b, accent: 0xc9e1e6,
+      },
+      "abandoned-caravan": {
+        blocks: [0x3a3d37, 0x44473e, 0x303630, 0x292f2b], top: 0x6d6b52, edge: 0x1c2421,
+        fleck: 0x87836e, foliage: 0x596148, accent: 0xd18c49,
+      },
+      "king-spider-nest": {
+        blocks: [0x241820, 0x311c25, 0x1d141a, 0x3a2028], top: 0x65404a, edge: 0x100b0f,
+        fleck: 0x6e4850, foliage: 0x4b2632, accent: 0xd94943,
+      },
+    };
+    return materials[this.area.id];
+  }
+
+  terrainHash(x, y, salt = 0) {
+    const value = Math.imul(Math.floor(x) + salt * 37, 374761393)
+      ^ Math.imul(Math.floor(y) + salt * 71, 668265263);
+    return Math.abs(value ^ (value >>> 13));
+  }
+
+  drawMinecraftTerrain(left, top, width, height) {
+    const blocks = this.add.graphics();
+    const material = this.terrainMaterial;
+    const blockSize = 32;
+
+    for (let rowY = top; rowY < top + height; rowY += blockSize) {
+      for (let columnX = left; columnX < left + width; columnX += blockSize) {
+        const cellWidth = Math.min(blockSize, left + width - columnX);
+        const cellHeight = Math.min(blockSize, top + height - rowY);
+        const hash = this.terrainHash(columnX, rowY, this.area.id.length);
+        const baseColor = material.blocks[hash % material.blocks.length];
+
+        blocks.fillStyle(material.edge, 1);
+        blocks.fillRect(columnX, rowY, cellWidth, cellHeight);
+        blocks.fillStyle(baseColor, 1);
+        blocks.fillRect(columnX + 2, rowY + 2, Math.max(1, cellWidth - 4), Math.max(1, cellHeight - 4));
+        blocks.fillStyle(material.fleck, 0.18);
+        blocks.fillRect(columnX + 5 + (hash % 9), rowY + 7 + ((hash >>> 3) % 8), 8 + (hash % 7), 4);
+        if ((hash % 4) === 0 && cellHeight > 20) {
+          blocks.fillStyle(material.edge, 0.55);
+          blocks.fillRect(columnX + 18, rowY + 18, 3, 9);
+          blocks.fillRect(columnX + 20, rowY + 24, 7, 3);
+        }
+        if (this.area.id === "king-spider-nest" && hash % 3 === 0) {
+          blocks.fillStyle(material.accent, 0.72);
+          blocks.fillRect(columnX + 8, rowY + 27, 11, 2);
+          blocks.fillRect(columnX + 17, rowY + 22, 2, 7);
+        }
+      }
+    }
+
+    // A chunky top face and irregular overhang make the collision surface read as blocks,
+    // rather than a dark rectangle placed in front of the environment plate.
+    blocks.fillStyle(material.edge, 1); blocks.fillRect(left, top, width, 12);
+    blocks.fillStyle(material.top, 1); blocks.fillRect(left, top, width, 7);
+    blocks.fillStyle(material.fleck, 0.42); blocks.fillRect(left, top + 1, width, 2);
+    for (let x = left + 8; x < left + width - 6; x += 24) {
+      const hash = this.terrainHash(x, top, 9);
+      blocks.fillStyle(hash % 3 === 0 ? material.foliage : material.top, 1);
+      blocks.fillRect(x, top + 6, 7 + (hash % 8), 5 + (hash % 6));
+      if (this.area.id === "webbed-grove" && hash % 2 === 0) {
+        blocks.fillStyle(material.accent, 0.55); blocks.fillRect(x + 4, top - 2, 13, 2);
+      }
+    }
+  }
+
+  drawMinecraftForegroundProps() {
+    const props = this.add.graphics();
+    const material = this.terrainMaterial;
+
+    this.terrainProfile.forEach(([left, right, top], segmentIndex) => {
+      for (let x = left + 58; x < right - 40; x += 118) {
+        const hash = this.terrainHash(x, top, segmentIndex + 14);
+        if (hash % 3 === 0) {
+          props.fillStyle(material.foliage, 1);
+          props.fillRect(x, top - 15, 6, 15);
+          props.fillRect(x + 7, top - 10, 8, 10);
+          props.fillRect(x + 16, top - 20, 5, 20);
+          props.fillStyle(material.fleck, 0.5); props.fillRect(x + 2, top - 17, 4, 4);
+        } else if (hash % 3 === 1) {
+          props.fillStyle(material.edge, 1); props.fillRect(x, top - 10, 22, 10);
+          props.fillStyle(material.blocks[hash % material.blocks.length], 1); props.fillRect(x + 3, top - 13, 16, 9);
+          props.fillStyle(material.fleck, 0.32); props.fillRect(x + 6, top - 11, 8, 2);
+        }
+      }
+    });
+
+    if (this.area.id === "deep-woods") {
+      this.drawBlockRoot(props, 410, this.getTerrainTopAt(410));
+      this.drawBlockRoot(props, 1260, this.getTerrainTopAt(1260));
+    } else if (this.area.id === "webbed-grove") {
+      this.drawSilkCocoon(props, 590, this.getTerrainTopAt(590));
+      this.drawSilkCocoon(props, 1450, this.getTerrainTopAt(1450));
+    } else if (this.area.id === "abandoned-caravan") {
+      this.drawSupplyCrates(props, 810, this.getTerrainTopAt(810));
+      this.drawBrokenWheel(props, 1320, this.getTerrainTopAt(1320));
+    } else if (this.area.id === "king-spider-nest") {
+      this.drawNestBrazier(props, 330, this.getTerrainTopAt(330));
+      this.drawNestBrazier(props, 1370, this.getTerrainTopAt(1370));
+    } else {
+      this.drawRuinBlocks(props, 430, this.getTerrainTopAt(430));
+      this.drawRuinBlocks(props, 1220, this.getTerrainTopAt(1220));
+    }
+  }
+
+  drawBlockRoot(graphics, x, groundY) {
+    graphics.fillStyle(0x172321, 1);
+    graphics.fillRect(x, groundY - 54, 22, 54);
+    graphics.fillRect(x + 18, groundY - 24, 48, 13);
+    graphics.fillRect(x + 55, groundY - 13, 36, 13);
+    graphics.fillStyle(0x34433b, 0.65); graphics.fillRect(x + 4, groundY - 50, 5, 38);
+  }
+
+  drawSilkCocoon(graphics, x, groundY) {
+    graphics.fillStyle(0x1a272d, 1); graphics.fillRect(x - 4, groundY - 43, 34, 43);
+    graphics.fillStyle(0xb9d1d6, 0.72);
+    graphics.fillRect(x, groundY - 38, 26, 31);
+    graphics.fillRect(x + 5, groundY - 43, 16, 41);
+    graphics.fillStyle(0xe1edef, 0.5);
+    for (let y = groundY - 35; y < groundY - 4; y += 8) graphics.fillRect(x - 3, y, 32, 3);
+  }
+
+  drawSupplyCrates(graphics, x, groundY) {
+    [[0, 0, 35], [37, 0, 29], [18, -27, 28]].forEach(([offsetX, offsetY, size]) => {
+      graphics.fillStyle(0x2a201b, 1); graphics.fillRect(x + offsetX, groundY - size + offsetY, size, size);
+      graphics.fillStyle(0x6f4b33, 1); graphics.fillRect(x + offsetX + 3, groundY - size + 3 + offsetY, size - 6, size - 6);
+      graphics.fillStyle(0xa06b42, 0.5); graphics.fillRect(x + offsetX + 6, groundY - size + 6 + offsetY, size - 12, 4);
+      graphics.fillStyle(0x33231c, 1); graphics.fillRect(x + offsetX + size / 2 - 2, groundY - size + 3 + offsetY, 4, size - 6);
+    });
+  }
+
+  drawBrokenWheel(graphics, x, groundY) {
+    graphics.lineStyle(7, 0x34251f, 1); graphics.strokeCircle(x, groundY - 24, 22);
+    graphics.lineStyle(4, 0x7b5339, 1); graphics.strokeCircle(x, groundY - 24, 18);
+    graphics.lineBetween(x - 16, groundY - 24, x + 16, groundY - 24);
+    graphics.lineBetween(x, groundY - 40, x, groundY - 8);
+  }
+
+  drawNestBrazier(graphics, x, groundY) {
+    graphics.fillStyle(0x160e13, 1); graphics.fillRect(x - 18, groundY - 32, 36, 32);
+    graphics.fillStyle(0x5b2930, 1); graphics.fillRect(x - 23, groundY - 38, 46, 10);
+    graphics.fillStyle(0xd83f3d, 0.9); graphics.fillRect(x - 12, groundY - 51, 24, 13);
+    graphics.fillStyle(0xff8a4e, 0.8); graphics.fillRect(x - 5, groundY - 60, 10, 18);
+  }
+
+  drawRuinBlocks(graphics, x, groundY) {
+    const material = this.terrainMaterial;
+    [[0, 0, 30, 24], [29, 0, 38, 31], [12, -24, 34, 22]].forEach(([offsetX, offsetY, width, height]) => {
+      graphics.fillStyle(material.edge, 1); graphics.fillRect(x + offsetX, groundY - height + offsetY, width, height);
+      graphics.fillStyle(material.blocks[1], 1); graphics.fillRect(x + offsetX + 3, groundY - height + 3 + offsetY, width - 6, height - 6);
+      graphics.fillStyle(material.fleck, 0.35); graphics.fillRect(x + offsetX + 7, groundY - height + 6 + offsetY, 11, 3);
+    });
   }
 
   createRoomTitle() {
