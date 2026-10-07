@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07171c" />
+    <title>晨曦传记：迷雾森林 - 灰盒原型</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <div id="game-container" aria-label="晨曦传记：迷雾森林游戏画面"></div>
+      <p class="loading-note">如果画面没有出现，请确认开发服务器正在运行。</p>
+    </main>
+    <script type="importmap">
+      {
+        "imports": {
+          "phaser": "./vendor/phaser.esm.min.js"
+        }
+      }
+    </script>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,51 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  background: #02090c;
+  color: #e9f4ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(38, 93, 100, 0.28), transparent 46%),
+    #02090c;
+}
+
+#game-shell {
+  width: min(100vw, 1280px);
+  padding: 12px;
+}
+
+#game-container {
+  overflow: hidden;
+  border: 1px solid #31535b;
+  border-radius: 8px;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.7);
+}
+
+#game-container canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.loading-note {
+  margin: 8px 0 0;
+  color: #739199;
+  font-size: 12px;
+  text-align: center;
+}
